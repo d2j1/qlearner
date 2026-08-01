@@ -6,7 +6,7 @@ service can start in development without any extra setup.
 """
 
 from functools import lru_cache
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,7 +14,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Typed runtime settings loaded from environment variables."""
 
-    mongo_url: str = "mongodb://localhost:27017/mcq_db"
+    mongo_url: str = Field(
+        default="mongodb://localhost:27017/mcq_db",
+        validation_alias=AliasChoices("MONGO_URL", "MONGODB_URI", "MONGO_URI", "mongo_url"),
+    )
     app_name: str = "MCQ Practice Backend"
     api_prefix: str = "/api"
     cors_allow_origins: str = Field(

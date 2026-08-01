@@ -10,6 +10,7 @@ from app.models.question import Question
 from app.schemas.question_schema import (
     BulkQuestionResponse,
     ModifiedCountResponse,
+    OptionSchema,
     QuestionCreate,
     QuestionListResponse,
     QuestionRead,
@@ -32,7 +33,7 @@ def _serialize_question(question: Question) -> QuestionRead:
         topic=question.topic,
         subtopic=question.subtopic,
         question_text=question.question_text,
-        options=question.options,
+        options=[OptionSchema(index=o.index, text=o.text) for o in question.options],
         correct_option_indices=question.correct_option_indices,
         explanation=question.explanation,
         difficulty=question.difficulty,
