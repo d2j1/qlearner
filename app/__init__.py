@@ -1,0 +1,1 @@
+"""MCQ backend application package."""
