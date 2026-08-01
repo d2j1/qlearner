@@ -12,6 +12,9 @@ from app.schemas.question_schema import (
     QuestionRead,
     TopicListResponse,
     SubtopicGroup,
+    QuestionUpdate,
+    TopicRenameRequest,
+    SubtopicRenameRequest,
 )
 
 router = APIRouter(prefix="/api", tags=["questions"])
@@ -99,3 +102,62 @@ async def bulk_insert_questions(
         inserted_count=len(inserted_ids),
         inserted_ids=inserted_ids,
     )
+
+
+@router.patch("/questions/{question_id}", response_model=QuestionRead)
+async def update_question(
+    request: Request,
+    question_id: str,
+    payload: QuestionUpdate,
+) -> QuestionRead:
+    """Partially update a question by id."""
+
+    try:
+        await ensure_beanie_initialized(request.app.state.mongo_client)
+        q = await Question.get(question_id)
+        if q is None:
+            raise HTTPException(status_code=404, detail="Question not found")
+
+        update_data = payload.model_dump(exclude_unset=True)
+        for k, v in update_data.items():
+            setattr(q, k, v)
+
+        await q.save()
+    except ServerSelectionTimeoutError as exc:
+        raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
+
+    return _serialize_question(q)
+
+
+@router.put("/topics/{topic}/rename")
+async def rename_topic(topic: str, body: TopicRenameRequest, request: Request):
+    """Rename a topic across all questions.
+
+    This performs a bulk update setting `topic` to `new_topic` where the old
+    topic matches. Returns the number of modified documents.
+    """
+
+    try:
+        await ensure_beanie_initialized(request.app.state.mongo_client)
+        result = await Question.get_motor_collection().update_many(
+            {"topic": topic}, {"$set": {"topic": body.new_topic}}
+        )
+    except ServerSelectionTimeoutError as exc:
+        raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
+
+    return {"modified_count": int(result.modified_count)}
+
+
+@router.put("/topics/{topic}/subtopics/{subtopic}/rename")
+async def rename_subtopic(topic: str, subtopic: str, body: SubtopicRenameRequest, request: Request):
+    """Rename a subtopic within a topic across all matching questions."""
+
+    try:
+        await ensure_beanie_initialized(request.app.state.mongo_client)
+        result = await Question.get_motor_collection().update_many(
+            {"topic": topic, "subtopic": subtopic}, {"$set": {"subtopic": body.new_subtopic}}
+        )
+    except ServerSelectionTimeoutError as exc:
+        raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
+
+    return {"modified_count": int(result.modified_count)}

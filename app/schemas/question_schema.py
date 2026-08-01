@@ -63,3 +63,22 @@ class SubtopicGroup(BaseModel):
 
     subtopic: str
     questions: List[QuestionRead]
+
+
+class QuestionUpdate(BaseModel):
+    """Partial update payload for a question."""
+
+    subtopic: Optional[str] = None
+    question_text: Optional[str] = None
+    options: Optional[List[OptionSchema]] = None
+    correct_option_indices: Optional[List[int]] = None
+    explanation: Optional[str] = None
+    difficulty: Optional[str] = None
+
+
+class TopicRenameRequest(BaseModel):
+    new_topic: str
+
+
+class SubtopicRenameRequest(BaseModel):
+    new_subtopic: str
