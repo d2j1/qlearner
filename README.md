@@ -42,8 +42,25 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `GET /health` - liveness check
 - `GET /ready` - MongoDB readiness check
 - `GET /api/topics` - list available topics
-- `GET /api/questions/{topic}` - list questions for a topic with `limit` and `offset`
+- `GET /api/questions` - flat question list with optional `topic`, `subtopic`, `limit`, and `offset`
+- `GET /api/topics/{topic}/questions` - list questions for a topic grouped by subtopic
+- `GET /api/questions/{question_id}` - fetch one question by id
 - `POST /api/questions/bulk` - bulk insert a generated question batch
+- `PATCH /api/questions/{question_id}` - partial question update
+- `PUT /api/topics/{topic}/rename` - rename a topic across all questions
+- `PUT /api/topics/{topic}/subtopics/{subtopic}/rename` - rename a subtopic across all matching questions
+
+### Question shape
+
+Frontend payloads and responses use:
+
+- `topic: string`
+- `subtopic: string`
+- `question_text: string`
+- `options: [{ index, text }]`
+- `correct_option_indices: number[]`
+- `explanation: string`
+- `difficulty: "EASY" | "MEDIUM" | "HARD"` (defaults to `MEDIUM`)
 
 ## LLM Batch Generator
 

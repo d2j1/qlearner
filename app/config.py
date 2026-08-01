@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     app_name: str = "MCQ Practice Backend"
     api_prefix: str = "/api"
     cors_allow_origins: str = Field(
-        default="http://localhost:3000,http://127.0.0.1:3000"
+        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
     )
     cors_allow_credentials: bool = False
 

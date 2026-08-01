@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import List
 
 from beanie import Document, Indexed
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
 class Option(BaseModel):
@@ -26,10 +26,21 @@ class Question(Document):
     subtopic: str
     question_text: str
     options: List[Option]
-    correct_option_indices: List[int]
+    correct_option_indices: List[int] = Field(
+        validation_alias=AliasChoices("correct_option_indices", "correct_option_index")
+    )
     explanation: str
     difficulty: str = "MEDIUM"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("correct_option_indices", mode="before")
+    @classmethod
+    def normalize_correct_option_indices(cls, value):
+        if value is None:
+            return value
+        if isinstance(value, int):
+            return [value]
+        return value
 
     class Settings:
         """Beanie collection configuration."""

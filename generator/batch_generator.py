@@ -46,7 +46,7 @@ Required structure:
 Rules:
 - Every question must have exactly 4 options.
 - Option indexes must be 0, 1, 2, and 3.
-- correct_option_index must be one of those values.
+- correct_option_indices must contain one or more of those values.
 - difficulty should be one of EASY, MEDIUM, or HARD.
 - explanations must clearly justify why the correct answer is right.
 - Keep each question unique, factual, and appropriate for practice use.

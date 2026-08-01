@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class OptionSchema(BaseModel):
@@ -20,10 +20,20 @@ class QuestionBase(BaseModel):
     subtopic: str
     question_text: str
     options: List[OptionSchema]
-    # support multiple correct options
-    correct_option_indices: List[int]
+    correct_option_indices: List[int] = Field(
+        validation_alias=AliasChoices("correct_option_indices", "correct_option_index")
+    )
     explanation: str
     difficulty: Optional[str] = "MEDIUM"
+
+    @field_validator("correct_option_indices", mode="before")
+    @classmethod
+    def normalize_correct_option_indices(cls, value):
+        if value is None:
+            return value
+        if isinstance(value, int):
+            return [value]
+        return value
 
 
 class QuestionCreate(QuestionBase):
@@ -46,6 +56,12 @@ class BulkQuestionResponse(BaseModel):
     inserted_ids: List[str] = Field(default_factory=list)
 
 
+class ModifiedCountResponse(BaseModel):
+    """Response returned by rename operations."""
+
+    modified_count: int
+
+
 class TopicListResponse(BaseModel):
     """Response wrapper for the topic listing endpoint."""
 
@@ -65,15 +81,46 @@ class SubtopicGroup(BaseModel):
     questions: List[QuestionRead]
 
 
+class TopicQuestionsResponse(BaseModel):
+    """Frontend-friendly response for all questions under one topic."""
+
+    topic: str
+    total: int
+    limit: int
+    offset: int
+    groups: List[SubtopicGroup]
+
+
+class QuestionListResponse(BaseModel):
+    """Frontend-friendly flat question list."""
+
+    total: int
+    limit: int
+    offset: int
+    items: List[QuestionRead]
+
+
 class QuestionUpdate(BaseModel):
     """Partial update payload for a question."""
 
     subtopic: Optional[str] = None
     question_text: Optional[str] = None
     options: Optional[List[OptionSchema]] = None
-    correct_option_indices: Optional[List[int]] = None
+    correct_option_indices: Optional[List[int]] = Field(
+        default=None,
+        validation_alias=AliasChoices("correct_option_indices", "correct_option_index"),
+    )
     explanation: Optional[str] = None
     difficulty: Optional[str] = None
+
+    @field_validator("correct_option_indices", mode="before")
+    @classmethod
+    def normalize_correct_option_indices(cls, value):
+        if value is None:
+            return value
+        if isinstance(value, int):
+            return [value]
+        return value
 
 
 class TopicRenameRequest(BaseModel):
