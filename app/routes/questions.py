@@ -1,5 +1,6 @@
 """Question and topic endpoints for the MCQ backend."""
 
+import re
 from collections import defaultdict
 
 from beanie import PydanticObjectId
@@ -9,6 +10,7 @@ from pymongo.errors import ServerSelectionTimeoutError
 from app.auth import require_admin
 from app.database import ensure_beanie_initialized
 from app.models.question import VISIBLE_FILTER, Question
+from app.routes.common import get_or_404
 from app.schemas.question_schema import (
     BulkQuestionResponse,
     DeletedResponse,
@@ -77,10 +79,11 @@ async def list_questions(
     request: Request,
     topic: str | None = Query(default=None),
     subtopic: str | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=200, description="Case-insensitive search in question text"),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ) -> QuestionListResponse:
-    """Return a flat list of questions, optionally filtered by topic/subtopic."""
+    """Return a flat list of questions, optionally filtered by topic/subtopic and text search."""
 
     try:
         await ensure_beanie_initialized(request.app.state.mongo_client)
@@ -89,6 +92,8 @@ async def list_questions(
             query["topic"] = topic
         if subtopic is not None:
             query["subtopic"] = subtopic
+        if q and q.strip():
+            query["question_text"] = {"$regex": re.escape(q.strip()), "$options": "i"}
         total, docs = await _count_and_load_questions(query, limit, offset)
     except ServerSelectionTimeoutError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
@@ -186,12 +191,9 @@ async def get_question_by_id(request: Request, question_id: str) -> QuestionRead
 
     try:
         await ensure_beanie_initialized(request.app.state.mongo_client)
-        question = await Question.get(question_id)
+        question = await get_or_404(Question, question_id, "Question")
     except ServerSelectionTimeoutError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
-
-    if question is None:
-        raise HTTPException(status_code=404, detail="Question not found")
 
     return _serialize_question(question)
 
@@ -230,9 +232,7 @@ async def update_question(
 
     try:
         await ensure_beanie_initialized(request.app.state.mongo_client)
-        q = await Question.get(question_id)
-        if q is None:
-            raise HTTPException(status_code=404, detail="Question not found")
+        q = await get_or_404(Question, question_id, "Question")
 
         update_data = payload.model_dump(exclude_unset=True)
         options = payload.options if payload.options is not None else q.options
