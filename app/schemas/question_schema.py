@@ -169,11 +169,48 @@ class DeletedResponse(BaseModel):
 
 
 class TopicRenameRequest(BaseModel):
-    new_topic: str
+    new_topic: str = Field(min_length=1, max_length=200)
+
+    @field_validator("new_topic", mode="before")
+    @classmethod
+    def strip(cls, value):
+        return value.strip() if isinstance(value, str) else value
 
 
 class SubtopicRenameRequest(BaseModel):
-    new_subtopic: str
+    new_subtopic: str = Field(min_length=1, max_length=200)
+
+    @field_validator("new_subtopic", mode="before")
+    @classmethod
+    def strip(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class RenameResponse(ModifiedCountResponse):
+    """Rename result. `modified_count` counts questions (kept for older clients)."""
+
+    notes_modified: int = 0
+    jobs_modified: int = 0
+    merged: bool = False  # the new name was already in use, so the two groups are now one
+
+
+class SubtopicTaxonomy(BaseModel):
+    subtopic: str
+    question_count: int  # approved / visible in practice
+    draft_count: int
+    note_count: int
+
+
+class TopicTaxonomy(BaseModel):
+    topic: str
+    question_count: int
+    draft_count: int
+    note_count: int
+    subtopics: List[SubtopicTaxonomy]
+
+
+class TaxonomyResponse(BaseModel):
+    topics: List[TopicTaxonomy]
 
 
 class IdsRequest(BaseModel):

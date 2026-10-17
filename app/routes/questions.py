@@ -11,10 +11,11 @@ from app.auth import require_admin
 from app.database import ensure_beanie_initialized
 from app.models.question import VISIBLE_FILTER, Question
 from app.routes.common import get_or_404
+from app.services.taxonomy import rename, taxonomy
 from app.schemas.question_schema import (
     BulkQuestionResponse,
     DeletedResponse,
-    ModifiedCountResponse,
+    RenameResponse,
     OptionSchema,
     QuestionCreate,
     QuestionListResponse,
@@ -24,6 +25,7 @@ from app.schemas.question_schema import (
     SubtopicListResponse,
     SubtopicSummary,
     SubtopicRenameRequest,
+    TaxonomyResponse,
     TopicListResponse,
     TopicQuestionsResponse,
     TopicRenameRequest,
@@ -275,40 +277,28 @@ async def delete_question(request: Request, question_id: str) -> DeletedResponse
     return DeletedResponse(deleted_id=question_id)
 
 
-@router.put("/topics/{topic}/rename", response_model=ModifiedCountResponse, dependencies=[Depends(require_admin)])
-async def rename_topic(topic: str, body: TopicRenameRequest, request: Request) -> ModifiedCountResponse:
-    """Rename a topic across all questions."""
+@router.get("/taxonomy", response_model=TaxonomyResponse, dependencies=[Depends(require_admin)])
+async def get_taxonomy() -> TaxonomyResponse:
+    """Admin: every topic/subtopic used by questions (incl. drafts) or notes, with counts."""
 
-    try:
-        await ensure_beanie_initialized(request.app.state.mongo_client)
-        result = await Question.get_motor_collection().update_many(
-            {"topic": topic}, {"$set": {"topic": body.new_topic}}
-        )
-    except ServerSelectionTimeoutError as exc:
-        raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
+    return TaxonomyResponse(topics=await taxonomy())
 
-    return ModifiedCountResponse(modified_count=int(result.modified_count))
+
+@router.put("/topics/{topic}/rename", response_model=RenameResponse, dependencies=[Depends(require_admin)])
+async def rename_topic(topic: str, body: TopicRenameRequest) -> RenameResponse:
+    """Rename a topic on every question, note and generation job."""
+
+    return RenameResponse(**await rename({"topic": topic}, "topic", body.new_topic, "topic"))
 
 
 @router.put(
     "/topics/{topic}/subtopics/{subtopic}/rename",
-    response_model=ModifiedCountResponse,
+    response_model=RenameResponse,
     dependencies=[Depends(require_admin)],
 )
-async def rename_subtopic(
-    topic: str,
-    subtopic: str,
-    body: SubtopicRenameRequest,
-    request: Request,
-) -> ModifiedCountResponse:
-    """Rename a subtopic within a topic across all matching questions."""
+async def rename_subtopic(topic: str, subtopic: str, body: SubtopicRenameRequest) -> RenameResponse:
+    """Rename a subtopic within a topic on every question, note and generation job."""
 
-    try:
-        await ensure_beanie_initialized(request.app.state.mongo_client)
-        result = await Question.get_motor_collection().update_many(
-            {"topic": topic, "subtopic": subtopic}, {"$set": {"subtopic": body.new_subtopic}}
-        )
-    except ServerSelectionTimeoutError as exc:
-        raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
-
-    return ModifiedCountResponse(modified_count=int(result.modified_count))
+    return RenameResponse(
+        **await rename({"topic": topic, "subtopic": subtopic}, "subtopic", body.new_subtopic, "subtopic")
+    )

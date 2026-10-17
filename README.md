@@ -59,8 +59,9 @@ Send `Authorization: Bearer <access_token>` on protected routes. Reads are publi
 - `POST /api/questions/bulk` - bulk insert a generated question batch
 - `PATCH /api/questions/{question_id}` - partial question update
 - `DELETE /api/questions/{question_id}` - delete one question
-- `PUT /api/topics/{topic}/rename` - rename a topic across all questions
-- `PUT /api/topics/{topic}/subtopics/{subtopic}/rename` - rename a subtopic across all matching questions
+- `GET /api/taxonomy` - admin: every topic and subtopic used by questions (including drafts) or notes, with `question_count`, `draft_count` and `note_count`; feeds rename dropdowns
+- `PUT /api/topics/{topic}/rename` `{ new_topic }` - admin: rename a topic on every question, note and generation job -> `{ modified_count, notes_modified, jobs_modified, merged }` (404 unknown topic, 422 empty or unchanged name; `merged` = the new name already existed)
+- `PUT /api/topics/{topic}/subtopics/{subtopic}/rename` `{ new_subtopic }` - admin: same, for one subtopic within a topic
 
 ### Question shape
 
