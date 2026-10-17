@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class OptionSchema(BaseModel):
@@ -11,6 +11,21 @@ class OptionSchema(BaseModel):
 
     index: int
     text: str
+
+
+def validate_correct_indices(options: List[OptionSchema], correct_option_indices: List[int]) -> None:
+    """Ensure option indices are unique and every correct index refers to an option."""
+
+    option_indices = [option.index for option in options]
+    if len(set(option_indices)) != len(option_indices):
+        raise ValueError("Option indices must be unique.")
+    if not correct_option_indices:
+        raise ValueError("At least one correct option index is required.")
+    if len(set(correct_option_indices)) != len(correct_option_indices):
+        raise ValueError("correct_option_indices must not contain duplicates.")
+    unknown = sorted(set(correct_option_indices) - set(option_indices))
+    if unknown:
+        raise ValueError(f"correct_option_indices {unknown} do not match any option index {sorted(option_indices)}.")
 
 
 class QuestionBase(BaseModel):
@@ -38,6 +53,11 @@ class QuestionBase(BaseModel):
 
 class QuestionCreate(QuestionBase):
     """Payload accepted by the bulk ingest endpoint."""
+
+    @model_validator(mode="after")
+    def check_correct_indices(self):
+        validate_correct_indices(self.options, self.correct_option_indices)
+        return self
 
 
 class QuestionRead(QuestionBase):
@@ -121,6 +141,26 @@ class QuestionUpdate(BaseModel):
         if isinstance(value, int):
             return [value]
         return value
+
+
+class SubtopicSummary(BaseModel):
+    """One subtopic within a topic and how many questions it holds."""
+
+    subtopic: str
+    question_count: int
+
+
+class SubtopicListResponse(BaseModel):
+    """Response wrapper for the subtopic listing endpoint."""
+
+    topic: str
+    subtopics: List[SubtopicSummary]
+
+
+class DeletedResponse(BaseModel):
+    """Response returned after deleting a question."""
+
+    deleted_id: str
 
 
 class TopicRenameRequest(BaseModel):

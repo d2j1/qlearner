@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.database import create_db_client, reset_beanie_state
+from app.routes.auth import router as auth_router
 from app.routes.questions import router as questions_router
 
 
@@ -38,6 +39,7 @@ if allow_origins:
         allow_headers=["*"],
     )
 
+app.include_router(auth_router)
 app.include_router(questions_router)
 
 

@@ -9,6 +9,7 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from app.config import get_settings
 from app.models.question import Question
+from app.models.user import User
 
 _beanie_initialized = False
 _beanie_lock = asyncio.Lock()
@@ -55,7 +56,7 @@ async def ensure_beanie_initialized(client: AsyncIOMotorClient) -> None:
         if _beanie_initialized:
             return
 
-        await init_beanie(database=get_database(client), document_models=[Question])
+        await init_beanie(database=get_database(client), document_models=[Question, User])
         _beanie_initialized = True
 
 

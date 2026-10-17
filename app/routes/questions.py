@@ -2,13 +2,16 @@
 
 from collections import defaultdict
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from beanie import PydanticObjectId
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pymongo.errors import ServerSelectionTimeoutError
 
+from app.auth import require_admin
 from app.database import ensure_beanie_initialized
 from app.models.question import Question
 from app.schemas.question_schema import (
     BulkQuestionResponse,
+    DeletedResponse,
     ModifiedCountResponse,
     OptionSchema,
     QuestionCreate,
@@ -16,10 +19,13 @@ from app.schemas.question_schema import (
     QuestionRead,
     QuestionUpdate,
     SubtopicGroup,
+    SubtopicListResponse,
+    SubtopicSummary,
     SubtopicRenameRequest,
     TopicListResponse,
     TopicQuestionsResponse,
     TopicRenameRequest,
+    validate_correct_indices,
 )
 
 router = APIRouter(prefix="/api", tags=["questions"])
@@ -91,6 +97,54 @@ async def list_questions(
     )
 
 
+@router.get("/topics/{topic}/subtopics", response_model=SubtopicListResponse)
+async def get_subtopics(request: Request, topic: str) -> SubtopicListResponse:
+    """Return the subtopics of a topic with their question counts."""
+
+    try:
+        await ensure_beanie_initialized(request.app.state.mongo_client)
+        pipeline = [
+            {"$match": {"topic": topic}},
+            {"$group": {"_id": "$subtopic", "count": {"$sum": 1}}},
+            {"$sort": {"_id": 1}},
+        ]
+        rows = await Question.get_motor_collection().aggregate(pipeline).to_list(length=None)
+    except ServerSelectionTimeoutError as exc:
+        raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="Topic not found")
+
+    return SubtopicListResponse(
+        topic=topic,
+        subtopics=[SubtopicSummary(subtopic=row["_id"], question_count=row["count"]) for row in rows if row["_id"]],
+    )
+
+
+@router.get("/topics/{topic}/subtopics/{subtopic}/questions", response_model=QuestionListResponse)
+async def get_questions_by_subtopic(
+    request: Request,
+    topic: str,
+    subtopic: str,
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+) -> QuestionListResponse:
+    """Return the practice questions for one subtopic of a topic."""
+
+    try:
+        await ensure_beanie_initialized(request.app.state.mongo_client)
+        total, docs = await _count_and_load_questions({"topic": topic, "subtopic": subtopic}, limit, offset)
+    except ServerSelectionTimeoutError as exc:
+        raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
+
+    return QuestionListResponse(
+        total=total,
+        limit=limit,
+        offset=offset,
+        items=[_serialize_question(doc) for doc in docs],
+    )
+
+
 @router.get("/topics/{topic}/questions", response_model=TopicQuestionsResponse)
 async def get_questions_by_topic(
     request: Request,
@@ -136,7 +190,7 @@ async def get_question_by_id(request: Request, question_id: str) -> QuestionRead
     return _serialize_question(question)
 
 
-@router.post("/questions/bulk", response_model=BulkQuestionResponse, status_code=201)
+@router.post("/questions/bulk", response_model=BulkQuestionResponse, status_code=201, dependencies=[Depends(require_admin)])
 async def bulk_insert_questions(
     request: Request,
     questions: list[QuestionCreate],
@@ -160,7 +214,7 @@ async def bulk_insert_questions(
     )
 
 
-@router.patch("/questions/{question_id}", response_model=QuestionRead)
+@router.patch("/questions/{question_id}", response_model=QuestionRead, dependencies=[Depends(require_admin)])
 async def update_question(
     request: Request,
     question_id: str,
@@ -175,6 +229,17 @@ async def update_question(
             raise HTTPException(status_code=404, detail="Question not found")
 
         update_data = payload.model_dump(exclude_unset=True)
+        options = payload.options if payload.options is not None else q.options
+        correct = (
+            payload.correct_option_indices
+            if payload.correct_option_indices is not None
+            else q.correct_option_indices
+        )
+        try:
+            validate_correct_indices(options, correct)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
         for k, v in update_data.items():
             setattr(q, k, v)
 
@@ -185,7 +250,26 @@ async def update_question(
     return _serialize_question(q)
 
 
-@router.put("/topics/{topic}/rename", response_model=ModifiedCountResponse)
+@router.delete("/questions/{question_id}", response_model=DeletedResponse, dependencies=[Depends(require_admin)])
+async def delete_question(request: Request, question_id: str) -> DeletedResponse:
+    """Delete one question by id."""
+
+    if not PydanticObjectId.is_valid(question_id):
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    try:
+        await ensure_beanie_initialized(request.app.state.mongo_client)
+        result = await Question.get_motor_collection().delete_one({"_id": PydanticObjectId(question_id)})
+    except ServerSelectionTimeoutError as exc:
+        raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
+
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    return DeletedResponse(deleted_id=question_id)
+
+
+@router.put("/topics/{topic}/rename", response_model=ModifiedCountResponse, dependencies=[Depends(require_admin)])
 async def rename_topic(topic: str, body: TopicRenameRequest, request: Request) -> ModifiedCountResponse:
     """Rename a topic across all questions."""
 
@@ -203,6 +287,7 @@ async def rename_topic(topic: str, body: TopicRenameRequest, request: Request) -
 @router.put(
     "/topics/{topic}/subtopics/{subtopic}/rename",
     response_model=ModifiedCountResponse,
+    dependencies=[Depends(require_admin)],
 )
 async def rename_subtopic(
     topic: str,

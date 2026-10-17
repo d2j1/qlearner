@@ -24,6 +24,14 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
     )
     cors_allow_credentials: bool = False
+    jwt_secret: str = "change-me-in-production"
+    jwt_expire_minutes: int = 60 * 24 * 7
+    # Comma-separated emails that get the admin role on register/login.
+    admin_emails: str = ""
+
+    @property
+    def admin_email_list(self) -> set[str]:
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 
     model_config = SettingsConfigDict(
         env_file=".env",
