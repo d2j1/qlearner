@@ -51,7 +51,7 @@ Send `Authorization: Bearer <access_token>` on protected routes. Reads are publi
 - `GET /health` - liveness check
 - `GET /ready` - MongoDB readiness check
 - `GET /api/topics` - list available topics
-- `GET /api/questions` - flat question list with optional `topic`, `subtopic`, `limit`, and `offset`
+- `GET /api/questions` - flat question list with optional `topic`, `subtopic`, `q` (case-insensitive search in question text), `limit`, and `offset`
 - `GET /api/topics/{topic}/subtopics` - list subtopics of a topic with question counts
 - `GET /api/topics/{topic}/subtopics/{subtopic}/questions` - practice questions for one subtopic (`limit`, `offset`)
 - `GET /api/topics/{topic}/questions` - list questions for a topic grouped by subtopic
