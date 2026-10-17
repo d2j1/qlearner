@@ -8,7 +8,7 @@ from pymongo.errors import ServerSelectionTimeoutError
 
 from app.auth import require_admin
 from app.database import ensure_beanie_initialized
-from app.models.question import Question
+from app.models.question import VISIBLE_FILTER, Question
 from app.schemas.question_schema import (
     BulkQuestionResponse,
     DeletedResponse,
@@ -44,6 +44,10 @@ def _serialize_question(question: Question) -> QuestionRead:
         explanation=question.explanation,
         difficulty=question.difficulty,
         created_at=question.created_at,
+        status=question.status,
+        tags=question.tags,
+        source_note_ids=[str(i) for i in question.source_note_ids],
+        generation_job_id=str(question.generation_job_id) if question.generation_job_id else None,
     )
 
 
@@ -61,7 +65,7 @@ async def get_topics(request: Request) -> TopicListResponse:
 
     try:
         await ensure_beanie_initialized(request.app.state.mongo_client)
-        topics = await Question.get_motor_collection().distinct("topic")
+        topics = await Question.get_motor_collection().distinct("topic", VISIBLE_FILTER)
     except ServerSelectionTimeoutError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
 
@@ -80,7 +84,7 @@ async def list_questions(
 
     try:
         await ensure_beanie_initialized(request.app.state.mongo_client)
-        query: dict[str, str] = {}
+        query: dict = dict(VISIBLE_FILTER)
         if topic is not None:
             query["topic"] = topic
         if subtopic is not None:
@@ -104,7 +108,7 @@ async def get_subtopics(request: Request, topic: str) -> SubtopicListResponse:
     try:
         await ensure_beanie_initialized(request.app.state.mongo_client)
         pipeline = [
-            {"$match": {"topic": topic}},
+            {"$match": {"topic": topic, **VISIBLE_FILTER}},
             {"$group": {"_id": "$subtopic", "count": {"$sum": 1}}},
             {"$sort": {"_id": 1}},
         ]
@@ -133,7 +137,9 @@ async def get_questions_by_subtopic(
 
     try:
         await ensure_beanie_initialized(request.app.state.mongo_client)
-        total, docs = await _count_and_load_questions({"topic": topic, "subtopic": subtopic}, limit, offset)
+        total, docs = await _count_and_load_questions(
+            {"topic": topic, "subtopic": subtopic, **VISIBLE_FILTER}, limit, offset
+        )
     except ServerSelectionTimeoutError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
 
@@ -156,7 +162,7 @@ async def get_questions_by_topic(
 
     try:
         await ensure_beanie_initialized(request.app.state.mongo_client)
-        total, docs = await _count_and_load_questions({"topic": topic}, limit, offset)
+        total, docs = await _count_and_load_questions({"topic": topic, **VISIBLE_FILTER}, limit, offset)
     except ServerSelectionTimeoutError as exc:
         raise HTTPException(status_code=503, detail="MongoDB is unavailable.") from exc
 
