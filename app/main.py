@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from app.config import get_settings
 from app.database import create_db_client, reset_beanie_state
 from app.routes.auth import router as auth_router
+from app.routes.llm_configs import router as llm_configs_router
 from app.routes.questions import router as questions_router
 
 
@@ -41,6 +42,7 @@ if allow_origins:
 
 app.include_router(auth_router)
 app.include_router(questions_router)
+app.include_router(llm_configs_router)
 
 
 @app.get("/")

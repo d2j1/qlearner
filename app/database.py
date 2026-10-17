@@ -8,6 +8,8 @@ from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 from app.config import get_settings
+from app.llm.registry import seed_default_configs
+from app.models.llm_config import LLMConfig
 from app.models.question import Question
 from app.models.user import User
 
@@ -56,7 +58,8 @@ async def ensure_beanie_initialized(client: AsyncIOMotorClient) -> None:
         if _beanie_initialized:
             return
 
-        await init_beanie(database=get_database(client), document_models=[Question, User])
+        await init_beanie(database=get_database(client), document_models=[Question, User, LLMConfig])
+        await seed_default_configs()
         _beanie_initialized = True
 
 
