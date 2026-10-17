@@ -50,30 +50,42 @@ async def rename(match: dict, field: str, new_value: str, label: str) -> dict:
     }
 
 
+def _name_pair(group_id: dict) -> tuple[str, str] | None:
+    topic, subtopic = group_id.get("t"), group_id.get("s")
+    if isinstance(topic, str) and isinstance(subtopic, str) and topic.strip() and subtopic.strip():
+        return topic, subtopic
+    return None
+
+
 async def taxonomy() -> list[dict]:
     """Every topic and subtopic used by a question (any status but rejected) or a note, with counts."""
 
     questions, notes, _jobs = _collections()
     counts: dict[tuple[str, str], dict[str, int]] = defaultdict(lambda: {"question_count": 0, "draft_count": 0, "note_count": 0})
 
+    # $group drops keys whose field is missing, so default them; legacy documents
+    # without a topic/subtopic (or with a non-string one) are skipped below.
+    group_key = {"t": {"$ifNull": ["$topic", None]}, "s": {"$ifNull": ["$subtopic", None]}}
+
     rows = await questions.aggregate([
         {"$match": {"status": {"$ne": "rejected"}}},
-        {"$group": {"_id": {"t": "$topic", "s": "$subtopic", "draft": {"$eq": ["$status", "draft"]}}, "n": {"$sum": 1}}},
+        {"$group": {"_id": {**group_key, "draft": {"$eq": ["$status", "draft"]}}, "n": {"$sum": 1}}},
     ]).to_list(length=None)
     for row in rows:
-        key = (row["_id"]["t"], row["_id"]["s"])
-        counts[key]["draft_count" if row["_id"]["draft"] else "question_count"] += row["n"]
+        key = _name_pair(row["_id"])
+        if key:
+            counts[key]["draft_count" if row["_id"].get("draft") else "question_count"] += row["n"]
 
     rows = await notes.aggregate([
-        {"$group": {"_id": {"t": "$topic", "s": "$subtopic"}, "n": {"$sum": 1}}},
+        {"$group": {"_id": group_key, "n": {"$sum": 1}}},
     ]).to_list(length=None)
     for row in rows:
-        counts[(row["_id"]["t"], row["_id"]["s"])]["note_count"] += row["n"]
+        key = _name_pair(row["_id"])
+        if key:
+            counts[key]["note_count"] += row["n"]
 
     topics: dict[str, dict] = {}
     for (topic, subtopic), c in sorted(counts.items(), key=lambda kv: (kv[0][0].lower(), kv[0][1].lower())):
-        if not topic or not subtopic:
-            continue
         entry = topics.setdefault(topic, {"topic": topic, "question_count": 0, "draft_count": 0, "note_count": 0, "subtopics": []})
         entry["subtopics"].append({"subtopic": subtopic, **c})
         for k, v in c.items():
