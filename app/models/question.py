@@ -56,5 +56,11 @@ class Question(Document):
         indexes = ["topic", "subtopic", "status", "generation_job_id"]
 
 
-# Mongo filter matching questions visible in practice (approved or legacy without status).
-VISIBLE_FILTER = {"status": {"$nin": ["draft", "rejected"]}}
+# Mongo filter matching questions visible in practice: approved (or legacy without a
+# status) and with a usable topic/subtopic. Malformed legacy documents are excluded
+# so they cannot crash listings that load them into the Question model.
+VISIBLE_FILTER = {
+    "status": {"$nin": ["draft", "rejected"]},
+    "topic": {"$type": "string", "$ne": ""},
+    "subtopic": {"$type": "string", "$ne": ""},
+}
