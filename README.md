@@ -91,6 +91,26 @@ To use Gemini instead:
 python generator/batch_generator.py --topic "Python Basics" --count 10 --provider gemini
 ```
 
+## Deployment
+
+The API is hosted on [Render](https://render.com) as a Docker web service built from this repo's `Dockerfile`.
+
+| Item | Value |
+| --- | --- |
+| Live URL | https://qlearner.onrender.com |
+| API docs | https://qlearner.onrender.com/docs |
+| Health / readiness | `/health`, `/ready` |
+| Render service | `qlearner` (ID `srv-d9mrclrm8hqs73cvjbig`), environment `Production` |
+| Source | GitHub `d2j1/qlearner`, branch `main` |
+| Instance | Free tier |
+| Deploys | Manual: Render dashboard -> **Manual Deploy** -> *Deploy latest commit* |
+
+Notes:
+
+- Pushing to `main` does **not** deploy. Trigger a manual deploy after merging.
+- The free instance spins down when idle; the first request after that can take 50+ seconds.
+- Set `MONGO_URL`, `JWT_SECRET`, `ADMIN_EMAILS` and `CORS_ALLOW_ORIGINS` (include the frontend's URL) under the service's **Environment** settings. The local `.env` is not deployed.
+
 ## Docker
 
 Build and run the container:
