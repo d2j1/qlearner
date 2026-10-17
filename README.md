@@ -32,10 +32,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `MONGO_URL`: MongoDB connection string. Defaults to `mongodb://localhost:27017/mcq_db`.
 - `CORS_ALLOW_ORIGINS`: Comma-separated list of allowed frontend origins.
 - `CORS_ALLOW_CREDENTIALS`: Set to `true` if cross-site credentials are required.
-- `OPENAI_API_KEY`: Required when using the OpenAI generator.
-- `GEMINI_API_KEY` or `GOOGLE_API_KEY`: Required when using the Gemini generator.
-- `LLM_PROVIDER`: Optional default provider for the generator script. Use `openai` or `gemini`.
-- `LLM_MODEL`: Optional model override for the generator script.
+- `GEMINI_API_KEY`: Gemini API key (free at aistudio.google.com); used by the default LLM config and the generator.
+- `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY_ENV`: Optional generator script overrides.
 - `JWT_SECRET`: Secret used to sign login tokens. Set a long random value in production.
 - `JWT_EXPIRE_MINUTES`: Token lifetime. Defaults to 7 days.
 - `ADMIN_EMAILS`: Comma-separated emails that get the `admin` role on register/login.
@@ -79,17 +77,26 @@ Frontend payloads and responses use:
 
 ## LLM Batch Generator
 
-Generate and seed questions directly into MongoDB:
+Generate and seed questions directly into MongoDB. It uses Gemini's free tier by default (set `GEMINI_API_KEY`):
 
 ```bash
-python generator/batch_generator.py --topic "Python Basics" --count 10 --provider openai
+python generator/batch_generator.py --topic "Python Basics" --count 10
 ```
 
-To use Gemini instead:
+Any OpenAI-compatible API works by overriding the model, base URL and key variable:
 
 ```bash
-python generator/batch_generator.py --topic "Python Basics" --count 10 --provider gemini
+python generator/batch_generator.py --topic "Python Basics" --model llama-3.3-70b-versatile   --base-url https://api.groq.com/openai/v1 --api-key-env GROQ_API_KEY
 ```
+
+### LLM configs (admin API)
+
+Models the app can generate with are stored in the `llm_configs` collection; a "Gemini Flash (free)" config (model `gemini-flash-latest`) is seeded on first start. Each config stores only the *name* of the env var holding its key.
+
+- `GET /api/llm-configs` - list configs (`api_key_set` shows whether the key env var is present)
+- `POST /api/llm-configs` - `{ name, base_url, model, api_key_env, is_free, enabled, is_default }`
+- `PATCH /api/llm-configs/{id}` / `DELETE /api/llm-configs/{id}`
+- `POST /api/llm-configs/{id}/test` - optional `{ prompt }`; returns `{ ok, latency_ms, output, input_tokens, output_tokens, error }`
 
 ## Deployment
 
