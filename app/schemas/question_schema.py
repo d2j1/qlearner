@@ -65,6 +65,10 @@ class QuestionRead(QuestionBase):
 
     id: Optional[str] = None
     created_at: datetime
+    status: str = "approved"
+    tags: List[str] = Field(default_factory=list)
+    source_note_ids: List[str] = Field(default_factory=list)
+    generation_job_id: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -132,6 +136,7 @@ class QuestionUpdate(BaseModel):
     )
     explanation: Optional[str] = None
     difficulty: Optional[str] = None
+    tags: Optional[List[str]] = None
 
     @field_validator("correct_option_indices", mode="before")
     @classmethod
@@ -169,3 +174,13 @@ class TopicRenameRequest(BaseModel):
 
 class SubtopicRenameRequest(BaseModel):
     new_subtopic: str
+
+
+class IdsRequest(BaseModel):
+    """A list of question ids for bulk draft actions."""
+
+    ids: List[str] = Field(min_length=1, max_length=500)
+
+
+class BulkStatusResponse(BaseModel):
+    modified_count: int

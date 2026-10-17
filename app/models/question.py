@@ -1,9 +1,9 @@
 """Beanie document model for multiple-choice questions."""
 
 from datetime import UTC, datetime
-from typing import List
+from typing import List, Literal, Optional
 
-from beanie import Document, Indexed
+from beanie import Document, Indexed, PydanticObjectId
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
@@ -32,6 +32,12 @@ class Question(Document):
     explanation: str
     difficulty: str = "MEDIUM"
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # Generated questions start as drafts; documents without a status predate
+    # this field and are treated as approved.
+    status: Literal["draft", "approved", "rejected"] = "approved"
+    source_note_ids: List[PydanticObjectId] = Field(default_factory=list)
+    generation_job_id: Optional[PydanticObjectId] = None
+    tags: List[str] = Field(default_factory=list)
 
     @field_validator("correct_option_indices", mode="before")
     @classmethod
@@ -47,4 +53,8 @@ class Question(Document):
 
         name = "mcq_questions"
         # Topic and subtopic lookups are primary access patterns for the API.
-        indexes = ["topic", "subtopic"]
+        indexes = ["topic", "subtopic", "status", "generation_job_id"]
+
+
+# Mongo filter matching questions visible in practice (approved or legacy without status).
+VISIBLE_FILTER = {"status": {"$nin": ["draft", "rejected"]}}

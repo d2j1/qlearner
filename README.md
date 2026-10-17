@@ -98,6 +98,17 @@ Models the app can generate with are stored in the `llm_configs` collection; a "
 - `PATCH /api/llm-configs/{id}` / `DELETE /api/llm-configs/{id}`
 - `POST /api/llm-configs/{id}/test` - optional `{ prompt }`; returns `{ ok, latency_ms, output, input_tokens, output_tokens, error }`
 
+### Notes, prompts and AI generation (admin API)
+
+Generated questions are saved as **drafts** and stay out of practice until approved. Questions without a `status` (created before this feature) count as approved.
+
+- Notes: `GET/POST /api/notes` (filter `topic`, `subtopic`), `GET/PATCH/DELETE /api/notes/{id}`
+- Prompt templates (immutable, versioned; posting an existing `name` creates its next version): `GET /api/prompts` (`all_versions=true` for history), `GET /api/prompts/{id}`, `POST /api/prompts`, `POST /api/prompts/{id}/default`, `GET /api/prompts/placeholders`
+- Jobs: `POST /api/generation/jobs` `{ topic, subtopic, note_ids?, focus?, extra_instructions?, count (1-50), difficulty (MIXED|EASY|MEDIUM|HARD), allow_outside_knowledge?, llm_config_id?, prompt_template_id? }` -> 202 job; poll `GET /api/generation/jobs/{id}` until `succeeded` or `failed`; `GET /api/generation/jobs?status=`
+- Drafts: `GET /api/questions/drafts?job_id=&topic=&subtopic=`, `POST /api/questions/{id}/approve|reject|regenerate`, bulk `POST /api/questions/approve|reject` `{ ids }`; edit with `PATCH /api/questions/{id}`
+
+Jobs run in the API process. Long notes are split into ~12k-character chunks, near-duplicate questions in the same subtopic are skipped, and jobs interrupted by a restart are marked failed on the next start.
+
 ## Deployment
 
 The API is hosted on [Render](https://render.com) as a Docker web service built from this repo's `Dockerfile`.
