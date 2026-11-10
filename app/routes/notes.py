@@ -1,16 +1,17 @@
-"""Admin CRUD for study notes."""
+"""Study notes: public read access, admin-only writes."""
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.auth import require_admin
+from app.database import ensure_beanie_initialized
 from app.models.note import Note
 from app.routes.common import get_or_404
 from app.schemas.generation_schema import NoteCreate, NoteListResponse, NoteRead, NoteSummary, NoteUpdate
 from app.schemas.question_schema import DeletedResponse
 
-router = APIRouter(prefix="/api/notes", tags=["notes"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/api/notes", tags=["notes"])
 
 
 def _read(note: Note) -> NoteRead:
@@ -33,11 +34,14 @@ def _summary(note: Note) -> NoteSummary:
 
 @router.get("", response_model=NoteListResponse)
 async def list_notes(
+    request: Request,
     topic: str | None = None,
     subtopic: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> NoteListResponse:
+    """Public: no login required."""
+    await ensure_beanie_initialized(request.app.state.mongo_client)
     query: dict = {}
     if topic is not None:
         query["topic"] = topic
@@ -48,7 +52,7 @@ async def list_notes(
     return NoteListResponse(total=total, limit=limit, offset=offset, items=[_summary(n) for n in notes])
 
 
-@router.post("", response_model=NoteRead, status_code=201)
+@router.post("", response_model=NoteRead, status_code=201, dependencies=[Depends(require_admin)])
 async def create_note(body: NoteCreate) -> NoteRead:
     note = Note(**body.model_dump())
     await note.insert()
@@ -56,11 +60,13 @@ async def create_note(body: NoteCreate) -> NoteRead:
 
 
 @router.get("/{note_id}", response_model=NoteRead)
-async def get_note(note_id: str) -> NoteRead:
+async def get_note(request: Request, note_id: str) -> NoteRead:
+    """Public: no login required."""
+    await ensure_beanie_initialized(request.app.state.mongo_client)
     return _read(await get_or_404(Note, note_id, "Note"))
 
 
-@router.patch("/{note_id}", response_model=NoteRead)
+@router.patch("/{note_id}", response_model=NoteRead, dependencies=[Depends(require_admin)])
 async def update_note(note_id: str, body: NoteUpdate) -> NoteRead:
     note = await get_or_404(Note, note_id, "Note")
     for key, value in body.model_dump(exclude_unset=True).items():
@@ -70,7 +76,7 @@ async def update_note(note_id: str, body: NoteUpdate) -> NoteRead:
     return _read(note)
 
 
-@router.delete("/{note_id}", response_model=DeletedResponse)
+@router.delete("/{note_id}", response_model=DeletedResponse, dependencies=[Depends(require_admin)])
 async def delete_note(note_id: str) -> DeletedResponse:
     note = await get_or_404(Note, note_id, "Note")
     await note.delete()
